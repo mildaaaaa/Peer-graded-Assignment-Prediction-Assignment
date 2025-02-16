@@ -1,0 +1,89 @@
+---
+title: "Prediction Report: Exercise Classification"
+author: "Milda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Introduction
+In this project, we predict the manner in which exercises were performed using a dataset collected from wearable sensors. The target variable is **classe**, which categorizes the type of exercise performed. This report details the data preprocessing, model training, validation, and final predictions.
+
+# Data Loading & Preprocessing
+The dataset is loaded, and columns with a high proportion of missing values are removed. Unnecessary metadata columns are also eliminated.
+
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+train_path <- "../data/pml-training.csv"
+test_path <- "../data/pml-testing.csv"
+
+training <- read_csv(train_path)
+testing <- read_csv(test_path)
+
+# Remove columns with excessive missing values
+na_threshold <- 0.9
+na_counts <- colSums(is.na(training)) / nrow(training)
+training <- training[, na_counts < na_threshold]
+
+# Ensure testing dataset has the same features as training (excluding 'classe')
+common_features <- setdiff(names(training), "classe")
+testing <- testing[, common_features, drop = FALSE]
+
+# Remove irrelevant metadata columns
+training <- training[, -c(1:7)]
+training$classe <- as.factor(training$classe)
+```
+
+# Model Training
+We use the **Random Forest** algorithm to train the model with 70% of the training data. The model predicts the target variable `classe`.
+
+```{r}
+set.seed(123)
+trainIndex <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainData <- training[trainIndex, ]
+validData <- training[-trainIndex, ]
+
+rf_model <- randomForest(classe ~ ., data = trainData, ntree = 100)
+```
+
+# Model Validation
+The trained model is validated against the remaining 30% of the data, and accuracy is measured using a confusion matrix.
+
+```{r}
+rf_predictions <- predict(rf_model, validData)
+conf_matrix <- confusionMatrix(rf_predictions, validData$classe)
+conf_matrix
+```
+
+# Feature Importance
+Random Forest provides feature importance scores, which help understand the significance of each variable in the classification.
+
+```{r}
+importance <- varImp(rf_model)
+plot(importance, main = "Feature Importance")
+```
+
+# Predictions on Test Data
+The trained model is applied to the test dataset, and the predictions are saved in individual text files.
+
+```{r}
+final_predictions <- predict(rf_model, testing)
+
+prediction_files <- function(predictions) {
+  for (i in 1:length(predictions)) {
+    filename <- paste0("../results/problem_id_", i, ".txt")
+    write.table(predictions[i], file = filename, quote = FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+prediction_files(final_predictions)
+```
+
+# Conclusion
+- The **Random Forest model** was successfully trained and validated.
+- The model achieved high accuracy on the validation dataset.
+- Predictions for the test dataset were saved in the required format.
+- Further optimization and feature selection could improve model performance.
